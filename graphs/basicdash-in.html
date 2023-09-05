@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        th, td {
+            border: 1px solid black;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        /* CSS class for highlighting the 5th row */
+        .highlight-row-yellow {
+            background-color: yellow;
+        }
+
+        /* CSS class for highlighting the 13th row */
+        .highlight-row-orange {
+            background-color: orange;
+        }
+
+        /* CSS class for highlighting the 19th row */
+        .highlight-row-green {
+            background-color: green;
+            color: white; /* To make the text readable on the green background */
+        }
+    </style>
+    <script>
+        // Function to get unit based on key
+        function getUnit(key) {
+            switch (key) {
+                case "AC_output_active_power":
+                    return "W";
+                case "AC_output_apparent_power":
+                    return "VA";
+                case "AC_output_frequency":
+                    return "Hz";
+                case "AC_output_voltage":
+                    return "V";
+                case "Battery_capacity":
+                    return "%";
+                case "Battery_charging_current":
+                    return "A";
+                case "Battery_discharge_current":
+                    return "A";
+                case "Battery_voltage":
+                    return "V";
+                case "Grid_frequency":
+                    return "Hz";
+                case "Grid_voltage":
+                    return "V";
+                case "Inverter_heatsink_temperature":
+                    return "Celsius x 10"; // Multiply by 10 and indicate the unit
+                case "Output_Load_Percent":
+                    return "%";
+                case "PV_Input_Voltage":
+                    return "V";
+                case "PV_Input_Watt":
+                    return "W";
+                default:
+                    return ""; // Leave unit column empty for all other lines
+            }
+        }
+
+        // Function to fetch data from the API and populate the table
+        async function fetchData() {
+            const apiUrl = 'http://192.168.1.105:5009/data'; // Replace with your REST API URL
+            try {
+                const response = await fetch(apiUrl);
+                const data = await response.json();
+
+                const table = document.getElementById('dashboard-table');
+                table.innerHTML = ''; // Clear existing data
+
+                for (const key in data) {
+                    if (data.hasOwnProperty(key)) {
+                        const value = key === "Inverter_heatsink_temperature" ? data[key] * 10 : data[key];
+                        const unit = getUnit(key);
+
+                        const row = table.insertRow();
+                        const cell1 = row.insertCell(0);
+                        const cell2 = row.insertCell(1);
+                        const cell3 = row.insertCell(2);
+
+                        cell1.innerText = key.replace(/_/g, ' ');
+                        cell2.innerText = value;
+                        cell3.innerText = unit;
+
+                        // Add CSS class to the 5th row (index 4)
+                        if (row.rowIndex === 4) {
+                            row.classList.add('highlight-row-yellow');
+                        }
+                        // Add CSS class to the 13th row (index 12)
+                        if (row.rowIndex === 12) {
+                            row.classList.add('highlight-row-orange');
+                        }
+                        // Add CSS class to the 19th row (index 18)
+                        if (row.rowIndex === 18) {
+                            row.classList.add('highlight-row-green');
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching data:', error);
+            }
+        }
+
+        // Refresh data every 30 seconds
+        window.onload = function () {
+            fetchData();
+            setInterval(fetchData, 30000);
+        };
+    </script>
+</head>
+<body>
+    <h1>Dashboard</h1>
+    <div style="overflow-x:auto;">
+        <table id="dashboard-table">
+            <tr>
+                <th>Parameter</th>
+                <th>Value</th>
+                <th>Unit</th> <!-- Add a new column for the unit -->
+            </tr>
+        </table>
+    </div>
+</body>
+</html>

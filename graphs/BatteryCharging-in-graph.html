@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Battery Charging and Discharge Current Graph</title>
+    <!-- Include D3.js and d3-legend.js -->
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+</head>
+<body>
+    <h1>Battery Charging and Discharge Current Graph</h1>
+
+    <!-- SVG container for the Battery Charging and Discharge Current graph -->
+    <svg id="batteryChart" width="1600" height="800"></svg>
+
+    <!-- Time range display above the graph -->
+    <div style="text-align: center; font-size: 18px; margin-bottom: 10px;">
+        Time Range: <span id="timeRange"></span>
+    </div>
+
+    <!-- Legend container with block styling -->
+    <div id="legend" style="position: absolute; top: 760px; left: 80px; border: 1px solid #ccc; padding: 10px; width: 480px;"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // Fetch JSON data from the provided URL
+            fetch('http://192.168.1.105/pd-axpert.json')
+                .then(response => response.json())
+                .then(jsonData => {
+                    const timestamps = jsonData.map(entry => new Date(entry.Timestamp));
+
+                    // Calculate the time range for the header
+                    const startTime = timestamps[0].toLocaleString();
+                    const endTime = timestamps[timestamps.length - 1].toLocaleString();
+                    document.getElementById('timeRange').textContent = `${startTime} - ${endTime}`;
+
+                    // Create an SVG container for the Battery Charging and Discharge Current graph
+                    const svgBattery = d3.select('#batteryChart');
+                    const marginBattery = { top: 40, right: 80, bottom: 120, left: 80 }; // Increased top margin
+                    const widthBattery = +svgBattery.attr('width') - marginBattery.left - marginBattery.right;
+                    const heightBattery = +svgBattery.attr('height') - marginBattery.top - marginBattery.bottom;
+                    const xBattery = d3.scaleTime()
+                        .domain(d3.extent(timestamps))
+                        .range([marginBattery.left, widthBattery - marginBattery.right]);
+
+                    // Calculate the y-axis domains for Battery Charging Current and Battery Discharge Current
+                    const maxChargingCurrent = d3.max(jsonData, d => +d.Battery_charging_current);
+                    const minDischargeCurrent = d3.min(jsonData, d => -1 * +d.Battery_discharge_current); // Invert the sign
+
+                    const yChargingCurrent = d3.scaleLinear()
+                        .domain([0, maxChargingCurrent])
+                        .range([heightBattery - marginBattery.bottom, marginBattery.top]);
+
+                    // Adjust the y-axis domain and range for Battery Discharge Current
+                    const yDischargeCurrent = d3.scaleLinear()
+                        .domain([-30, 30]) // Set the domain to -30A to 30A
+                        .range([heightBattery - marginBattery.bottom, marginBattery.top]);
+
+                    const colorScaleBattery = d3.scaleOrdinal()
+                        .domain(['Battery_charging_current', 'Battery_discharge_current'])
+                        .range(['blue', 'red']); // Match colors to lines on the graph
+
+                    const lineChargingCurrent = d3.line()
+                        .x(d => xBattery(new Date(d.Timestamp)))
+                        .y(d => yChargingCurrent(+d.Battery_charging_current))
+                        .curve(d3.curveBasis); // Use curveBasis for curved lines
+
+                    const lineDischargeCurrent = d3.line()
+                        .x(d => xBattery(new Date(d.Timestamp)))
+                        .y(d => yDischargeCurrent(-1 * +d.Battery_discharge_current)) // Invert the sign
+                        .curve(d3.curveBasis); // Use curveBasis for curved lines
+
+                    const linesDataBattery = [
+                        {
+                            variable: 'Battery_charging_current',
+                            data: jsonData,
+                            color: colorScaleBattery('Battery_charging_current'),
+                            lineGenerator: lineChargingCurrent,
+                        },
+                        {
+                            variable: 'Battery_discharge_current',
+                            data: jsonData,
+                            color: colorScaleBattery('Battery_discharge_current'),
+                            lineGenerator: lineDischargeCurrent,
+                        }
+                    ];
+
+                    const linesBattery = svgBattery.selectAll(".line")
+                        .data(linesDataBattery);
+
+                    linesBattery.enter().append("path")
+                        .attr("class", "line")
+                        .attr('fill', 'none')
+                        .attr('stroke', d => d.color)
+                        .attr('stroke-width', 2) // Increased line width
+                        .merge(linesBattery)
+                        .attr('d', d => d.lineGenerator(d.data));
+
+                    // Add data labels for the first and last data points of Battery Charging Current
+                    svgBattery.selectAll(".data-label-charging")
+                        .data([jsonData[0], jsonData[jsonData.length - 1]])
+                        .enter().append("text")
+                        .attr("class", "data-label-charging")
+                        .attr("x", d => xBattery(new Date(d.Timestamp)))
+                        .attr("y", d => yChargingCurrent(+d.Battery_charging_current))
+                        .attr("dy", -15) // Adjust the vertical offset
+                        .text(d => (+d.Battery_charging_current).toFixed(2) + ' A')
+                        .style("text-anchor", (d, i) => i === 0 ? "start" : "end")
+                        .style("font-size", "12px");
+
+                    // Add data labels for the first and last data points of Battery Discharge Current
+                    svgBattery.selectAll(".data-label-discharge")
+                        .data([jsonData[0], jsonData[jsonData.length - 1]])
+                        .enter().append("text")
+                        .attr("class", "data-label-discharge")
+                        .attr("x", d => xBattery(new Date(d.Timestamp)))
+                        .attr("y", d => yDischargeCurrent(-1 * +d.Battery_discharge_current)) // Invert the sign
+                        .attr("dy", -15) // Adjust the vertical offset
+                        .text(d => (-1 * +d.Battery_discharge_current).toFixed(2) + ' A') // Invert the sign
+                        .style("text-anchor", (d, i) => i === 0 ? "start" : "end")
+                        .style("font-size", "12px");
+
+                    // Add x-axis for timestamp at the bottom
+                    svgBattery.append('g')
+                        .attr('transform', `translate(0,${heightBattery - marginBattery.bottom})`)
+                        .call(d3.axisBottom(xBattery));
+
+                    // Add left y-axis for Battery Charging Current
+                    svgBattery.append('g')
+                        .attr('class', 'yLeft charging')
+                        .attr('transform', `translate(${marginBattery.left},0)`)
+                        .call(d3.axisLeft(yChargingCurrent).tickFormat(d => d + ' A'))
+                        .append('text')
+                        .attr('transform', 'rotate(-90)')
+                        .attr('y', 6)
+                        .attr('dy', '0.71em')
+                        .style('text-anchor', 'end')
+                        .text('Charging Current (A)');
+
+                    // Add right y-axis for Battery Discharge Current
+                    svgBattery.append('g')
+                        .attr('class', 'yRight discharge')
+                        .attr('transform', `translate(${widthBattery - marginBattery.right},0)`)
+                        .call(d3.axisRight(yDischargeCurrent).tickFormat(d => (d / 100).toFixed(2) + ' A')) // Divide by 100 and add 'A'
+                        .append('text')
+                        .attr('transform', 'rotate(-90)')
+                        .attr('y', -30)
+                        .attr('dy', '0.71em')
+                        .style('text-anchor', 'end')
+                        .text('Discharge Current (A)');
+
+                    // Add the legend to the graph
+                    const legend = d3.select('#legend')
+                        .append("svg")
+                        .attr("width", 480)
+                        .attr("height", 60); // Adjust the height as needed
+
+                    const legendGroup = legend.selectAll(".legend-item")
+                        .data(linesDataBattery)
+                        .enter()
+                        .append("g")
+                        .attr("class", "legend-item")
+                        .attr("transform", (d, i) => "translate(" + (i * 160) + ",0)");
+
+                    legendGroup.append("rect")
+                        .attr("x", 0)
+                        .attr("width", 15)
+                        .attr("height", 15)
+                        .style("fill", d => d.color);
+
+                    legendGroup.append("text")
+                        .attr("x", 20)
+                        .attr("y", 20) // Adjust the vertical position
+                        .style("text-anchor", "start")
+                        .text(d => d.variable === 'Battery_charging_current' ? 'Charging Current (A)' : 'Discharge Current (A)');
+                })
+                .catch(error => {
+                    console.error('Error fetching data:', error);
+                });
+        });
+    </script>
+</body>
+</html>

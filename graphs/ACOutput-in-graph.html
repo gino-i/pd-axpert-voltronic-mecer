@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AC Output Voltage and Power Graph</title>
+    <!-- Include D3.js and d3-legend.js -->
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+</head>
+<body>
+    <h1>AC Output Voltage and Power Graph</h1>
+
+    <!-- SVG container for the AC Output Voltage and Power graph -->
+    <svg id="acOutputChart" width="1600" height="800"></svg>
+
+    <!-- Time range display above the graph -->
+    <div style="text-align: center; font-size: 18px; margin-bottom: 10px;">
+        Time Range: <span id="timeRange"></span>
+    </div>
+
+    <!-- Legend container with block styling -->
+    <div id="legend" style="position: absolute; top: 760px; left: 80px; border: 1px solid #ccc; padding: 10px; width: 480px;"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // Fetch JSON data from the provided URL
+            fetch('http://192.168.1.105/pd-axpert.json')
+                .then(response => response.json())
+                .then(jsonData => {
+                    const timestamps = jsonData.map(entry => new Date(entry.Timestamp));
+
+                    // Calculate the time range for the header
+                    const startTime = timestamps[0].toLocaleString();
+                    const endTime = timestamps[timestamps.length - 1].toLocaleString();
+                    document.getElementById('timeRange').textContent = `${startTime} - ${endTime}`;
+
+                    // Create an SVG container for the AC Output Voltage and Power graph
+                    const svgACOutput = d3.select('#acOutputChart');
+                    const marginACOutput = { top: 40, right: 80, bottom: 120, left: 80 }; // Increased top margin
+                    const widthACOutput = +svgACOutput.attr('width') - marginACOutput.left - marginACOutput.right;
+                    const heightACOutput = +svgACOutput.attr('height') - marginACOutput.top - marginACOutput.bottom;
+                    const xACOutput = d3.scaleTime()
+                        .domain(d3.extent(timestamps))
+                        .range([marginACOutput.left, widthACOutput - marginACOutput.right]);
+
+                    // Calculate the y-axis domains for AC Output Voltage, Apparent Power, and Active Power
+                    const maxVoltage = d3.max(jsonData, d => +d.AC_output_voltage);
+                    const maxApparentPower = d3.max(jsonData, d => +d.AC_output_apparent_power);
+                    const maxActivePower = d3.max(jsonData, d => +d.AC_output_active_power);
+
+                    const yVoltage = d3.scaleLinear()
+                        .domain([0, maxVoltage])
+                        .range([heightACOutput - marginACOutput.bottom, marginACOutput.top]);
+
+                    const yApparentPower = d3.scaleLinear()
+                        .domain([0, maxApparentPower])
+                        .range([heightACOutput - marginACOutput.bottom, marginACOutput.top]);
+
+                    const yActivePower = d3.scaleLinear()
+                        .domain([0, maxActivePower])
+                        .range([heightACOutput - marginACOutput.bottom, marginACOutput.top]);
+
+                    const colorScaleACOutput = d3.scaleOrdinal()
+                        .domain(['AC_output_voltage', 'AC_output_apparent_power', 'AC_output_active_power'])
+                        .range(['blue', 'green', 'red']); // Match colors to lines on the graph
+
+                    const lineVoltage = d3.line()
+                        .x(d => xACOutput(new Date(d.Timestamp)))
+                        .y(d => yVoltage(+d.AC_output_voltage))
+                        .curve(d3.curveBasis); // Use curveBasis for curved lines
+
+                    const lineApparentPower = d3.line()
+                        .x(d => xACOutput(new Date(d.Timestamp)))
+                        .y(d => yApparentPower(+d.AC_output_apparent_power))
+                        .curve(d3.curveBasis); // Use curveBasis for curved lines
+
+                    const lineActivePower = d3.line()
+                        .x(d => xACOutput(new Date(d.Timestamp)))
+                        .y(d => yActivePower(+d.AC_output_active_power))
+                        .curve(d3.curveBasis); // Use curveBasis for curved lines
+
+                    const linesDataACOutput = [
+                        {
+                            variable: 'AC_output_voltage',
+                            data: jsonData,
+                            color: colorScaleACOutput('AC_output_voltage'),
+                            lineGenerator: lineVoltage,
+                            yAxis: 'left', // Specify left y-axis
+                            label: 'AC Output Voltage (V)',
+                        },
+                        {
+                            variable: 'AC_output_apparent_power',
+                            data: jsonData,
+                            color: colorScaleACOutput('AC_output_apparent_power'),
+                            lineGenerator: lineApparentPower,
+                            yAxis: 'right', // Specify right y-axis
+                            label: 'Apparent Power (W)',
+                        },
+                        {
+                            variable: 'AC_output_active_power',
+                            data: jsonData,
+                            color: colorScaleACOutput('AC_output_active_power'),
+                            lineGenerator: lineActivePower,
+                            yAxis: 'right', // Specify right y-axis
+                            label: 'Active Power (W)',
+                        },
+                    ];
+
+                    const linesACOutput = svgACOutput.selectAll(".line")
+                        .data(linesDataACOutput);
+
+                    linesACOutput.enter().append("path")
+                        .attr("class", "line")
+                        .attr('fill', 'none')
+                        .attr('stroke', d => d.color)
+                        .attr('stroke-width', 2) // Increased line width
+                        .merge(linesACOutput)
+                        .attr('d', d => d.lineGenerator(d.data));
+
+                    // Add x-axis for timestamp at the bottom
+                    svgACOutput.append('g')
+                        .attr('transform', `translate(0,${heightACOutput - marginACOutput.bottom})`)
+                        .call(d3.axisBottom(xACOutput));
+
+                    // Add left y-axis for AC Output Voltage
+                    svgACOutput.append('g')
+                        .attr('class', 'yLeft voltage')
+                        .attr('transform', `translate(${marginACOutput.left},0)`)
+                        .call(d3.axisLeft(yVoltage).tickFormat(d => d + ' V')) // Add 'V' to the tick labels
+                        .append('text')
+                        .attr('transform', 'rotate(-90)')
+                        .attr('y', 6)
+                        .attr('dy', '0.71em')
+                        .style('text-anchor', 'end')
+                        .text('AC Output Voltage (V)');
+
+                    // Add right y-axis for Apparent and Active Power
+                    svgACOutput.append('g')
+                        .attr('class', 'yRight power')
+                        .attr('transform', `translate(${widthACOutput - marginACOutput.right},0)`)
+                        .call(d3.axisRight(yApparentPower).tickFormat(d => d + ' W')) // Add 'W' to the tick labels
+                        .append('text')
+                        .attr('transform', 'rotate(-90)')
+                        .attr('y', -30)
+                        .attr('dy', '0.71em')
+                        .style('text-anchor', 'end')
+                        .text('Apparent and Active Power (W)');
+
+                    // Add the legend to the graph
+                    const legend = d3.select('#legend')
+                        .append("svg")
+                        .attr("width", 480)
+                        .attr("height", 60); // Adjust the height as needed
+
+                    const legendGroup = legend.selectAll(".legend-item")
+                        .data(linesDataACOutput)
+                        .enter()
+                        .append("g")
+                        .attr("class", "legend-item")
+                        .attr("transform", (d, i) => "translate(" + (i * 160) + ",0)");
+
+                    legendGroup.append("rect")
+                        .attr("x", 0)
+                        .attr("width", 15)
+                        .attr("height", 15)
+                        .style("fill", d => d.color);
+
+                    legendGroup.append("text")
+                        .attr("x", 20)
+                        .attr("y", 20) // Adjust the vertical position
+                        .style("text-anchor", "start")
+                        .text(d => d.label); // Use the specified label
+                })
+                .catch(error => {
+                    console.error('Error fetching data:', error);
+                });
+        });
+    </script>
+</body>
+</html>
