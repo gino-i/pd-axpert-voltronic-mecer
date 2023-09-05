@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+    <style>
+        .gauge {
+            display: inline-block;
+            margin: 10px;
+            width: 200px;
+            height: 200px;
+        }
+
+        .icon {
+            width: 50px; /* Adjust the size of the icons as needed */
+            height: auto;
+            margin-right: 10px; /* Add margin to the right of the icons */
+        }
+
+        /* Define a custom font for the value text */
+        @font-face {
+            font-family: 'DaggerSquare';
+            src: url('../20230901-gauges/path-to-DaggerSquare-font.woff2') format('woff2'), /* Update with the actual path to your DaggerSquare font */
+url('../20230901-gauges/path-to-DaggerSquare-font.woff') format('woff'); /* Update with the actual path to your DaggerSquare font */
+        }
+
+        /* Apply the custom font to the value text and style it in blue */
+        .value-text {
+            font-family: 'DaggerSquare', sans-serif; /* Use the custom font */
+            fill: blue; /* Set the font color to blue */
+        }
+    </style>
+</head>
+<body>
+    <h1>Dashboard</h1>
+    <div id="battery-gauge" class="gauge"></div>
+    <div id="output-load-gauge" class="gauge"></div>
+    <div id="grid-voltage-gauge" class="gauge"></div>
+
+    <p><a href="basicdash-in.html" title="Basic Information Table" target="_top">Basic Information Table</a> </p>
+    <p>&nbsp;</p>
+    <p>BATTERY STATISTICS</p>
+    <p><a href="BatteryCapacity-in-graph.html" title="Battery Capacity and Voltage Graph">Battery Capacity and Voltage Graph</a></p>
+    <p><a href="BatteryCharging-in-graph.html" title="Battery Charging and Discharging Graph">Battery Charging and Discharging Graph</a></p>
+    <p>&nbsp;</p>
+    <p>POWER STATISTICS</p>
+    <p><a href="GridOutput-in-graph.html" title="Grid Voltage and Output Load Percent Graph">Grid Voltage and Output Load Percent Graph</a></p>
+    <p><a href="ACOutput-in-graph.html" title="AC Output Voltage and Power Graph">AC Output Voltage and Power Graph</a></p>
+    <p>&nbsp;</p>
+    <p>INVERTER STATISTICS</p>
+    <p>&lt;nothing&gt;</p>
+    <p>&lt;nothing&gt;</p>
+    <p>&nbsp;</p>
+<script>
+        function updateGauge(id, value, label, isReverseColors = false, max = 100) {
+            const width = 200;
+            const height = 200;
+            const radius = Math.min(width, height) / 2;
+
+            let color;
+            let iconSrc;
+
+            if (id === 'battery-gauge') {
+                if (value >= 90) {
+                    color = 'green';
+                } else if (value >= 76) {
+                    color = 'yellow';
+                } else if (value >= 31) {
+                    color = 'orange';
+                } else {
+                    color = 'red';
+                }
+                iconSrc = 'battery-icon.png'; // Battery icon source
+            } else if (id === 'output-load-gauge') {
+                if (isReverseColors) {
+                    if (value <= 30) {
+                        color = 'green';
+                    } else if (value <= 50) {
+                        color = 'yellow';
+                    } else if (value <= 75) {
+                        color = 'orange';
+                    } else {
+                        color = 'red';
+                    }
+                } else {
+                    if (value <= 30) {
+                        color = 'red';
+                    } else if (value <= 50) {
+                        color = 'orange';
+                    } else if (value <= 75) {
+                        color = 'yellow';
+                    } else {
+                        color = 'green';
+                    }
+                }
+                iconSrc = 'lightbulb-icon.png'; // Lightbulb icon source
+            } else if (id === 'grid-voltage-gauge') {
+                if (value >= 100) {
+                    color = 'green';
+                    iconSrc = 'pylon-icon.png'; // Pylon icon source
+                } else {
+                    color = 'red';
+                    iconSrc = 'no-pylon-icon.png'; // No pylon icon source
+                }
+                max = 250; // Set the max value to 250 for Grid Voltage
+            }
+
+            const svg = d3.select(`#${id}`)
+                .append('svg')
+                .attr('width', width)
+                .attr('height', height)
+                .append('g')
+                .attr('transform', `translate(${width / 2},${height / 2})`);
+
+            // Display the icon next to the label
+            svg.append('image')
+                .attr('xlink:href', iconSrc) // Set the icon source based on the gauge
+                .attr('class', 'icon')
+                .attr('x', -25) // Adjust the horizontal position of the icon
+                .attr('y', -35) // Adjust the vertical position of the icon
+                .attr('width', 50) // Adjust the size of the icons as needed
+                .attr('height', 50); // Adjust the size of the icons as needed
+
+            const arc = d3.arc()
+                .innerRadius(70)
+                .outerRadius(radius)
+                .startAngle(-Math.PI / 2)
+                .endAngle((-Math.PI / 2) + (value / max) * Math.PI);
+
+            svg.append('path')
+                .datum({ endAngle: (-Math.PI / 2) + Math.PI })
+                .style('fill', color)
+                .attr('d', arc);
+
+            // Display the label below the icon
+            svg.append('text')
+                .attr('text-anchor', 'middle')
+                .attr('dy', '1.5em') // Move the text below the icon
+                .style('font-size', '24px')
+                .text(label);
+
+            // Apply the custom font and blue color to the value text
+            svg.append('text')
+                .attr('text-anchor', 'middle')
+                .attr('dy', '2em') // Move the text further below the icon
+                .attr('class', 'value-text') // Apply the custom font class
+                .style('font-size', '36px')
+                .text(value);
+
+            svg.append('text')
+                .attr('text-anchor', 'middle')
+                .attr('dy', '5.5em') // Move the text even further below the icon
+                .style('font-size', '16px')
+                .text(`Max: ${max}`);
+        }
+
+        async function fetchData() {
+            const apiUrl = 'http://192.168.1.105:5009/data';
+            try {
+                const response = await fetch(apiUrl);
+                const data = await response.json();
+
+                for (const key in data) {
+                    if (data.hasOwnProperty(key)) {
+                        const value = data[key];
+
+                        if (key === 'Battery_capacity') {
+                            updateGauge('battery-gauge', value, 'Battery Capacity');
+                        }
+
+                        if (key === 'Output_Load_Percent') {
+                            updateGauge('output-load-gauge', value, 'Output Load Percent', true); // Reverse colors for Output Load Percent
+                        }
+
+                        if (key === 'Grid_voltage') {
+                            updateGauge('grid-voltage-gauge', value, 'Grid Voltage');
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching data:', error);
+            }
+        }
+
+        // Refresh the page every 30 seconds
+        function refreshPage() {
+            location.reload();
+        }
+
+        window.onload = function () {
+            fetchData();
+            setInterval(fetchData, 30000);
+            setTimeout(refreshPage, 30000); // Refresh the page every 30 seconds
+        };
+      </script>
+</body>
+</html>
